@@ -3,28 +3,56 @@ import { logError as _ulogError } from '@/lib/logging/core'
 import { useRef } from 'react'
 import type { Character, Project } from '@/types/project'
 import { queryKeys } from '../keys'
-import type { ProjectAssetsData } from '../hooks/useProjectAssets'
+import type { AssetSummary, CharacterAssetSummary } from '@/lib/assets/contracts'
 import { apiFetch } from '@/lib/api-fetch'
 import {
     clearTaskTargetOverlay,
     upsertTaskTargetOverlay,
 } from '../task-target-overlay'
 import {
-    invalidateQueryTemplates,
     requestJsonWithError,
     requestVoidWithError,
 } from './mutation-shared'
 
 interface SelectProjectCharacterImageContext {
-    previousAssets: ProjectAssetsData | undefined
+    previousAssets: AssetSummary[] | undefined
     previousProject: Project | undefined
     targetKey: string
     requestId: number
 }
 
 interface DeleteProjectCharacterContext {
-    previousAssets: ProjectAssetsData | undefined
+    previousAssets: AssetSummary[] | undefined
     previousProject: Project | undefined
+}
+
+function applyCharacterSelectionToAssetSummary(
+    assets: AssetSummary[],
+    characterId: string,
+    appearanceId: string,
+    selectedIndex: number | null,
+): AssetSummary[] {
+    return assets.map((asset) => {
+        if (asset.kind !== 'character' || asset.id !== characterId) return asset
+        const characterAsset = asset as CharacterAssetSummary
+        return {
+            ...characterAsset,
+            variants: characterAsset.variants.map((variant) => {
+                if (variant.id !== appearanceId) return variant
+                const selectedRenderIndex = selectedIndex
+                return {
+                    ...variant,
+                    selectionState: {
+                        selectedRenderIndex,
+                    },
+                    renders: variant.renders.map((render, index) => ({
+                        ...render,
+                        isSelected: index === selectedIndex,
+                    })),
+                }
+            }),
+        }
+    })
 }
 
 function applyCharacterSelectionToCharacters(
@@ -53,19 +81,6 @@ function applyCharacterSelectionToCharacters(
     })
 }
 
-function applyCharacterSelectionToAssets(
-    previous: ProjectAssetsData | undefined,
-    characterId: string,
-    appearanceId: string,
-    selectedIndex: number | null,
-): ProjectAssetsData | undefined {
-    if (!previous) return previous
-    return {
-        ...previous,
-        characters: applyCharacterSelectionToCharacters(previous.characters || [], characterId, appearanceId, selectedIndex),
-    }
-}
-
 function applyCharacterSelectionToProject(
     previous: Project | undefined,
     characterId: string,
@@ -83,15 +98,11 @@ function applyCharacterSelectionToProject(
     }
 }
 
-function removeCharacterFromAssets(
-    previous: ProjectAssetsData | undefined,
+function removeCharacterFromAssetSummary(
+    assets: AssetSummary[],
     characterId: string,
-): ProjectAssetsData | undefined {
-    if (!previous) return previous
-    return {
-        ...previous,
-        characters: (previous.characters || []).filter((character) => character.id !== characterId),
-    }
+): AssetSummary[] {
+    return assets.filter((asset) => asset.id !== characterId)
 }
 
 function removeCharacterFromProject(
@@ -112,7 +123,7 @@ function removeCharacterFromProject(
 export function useGenerateProjectCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId), exact: false })
 
     return useMutation({
         mutationFn: async ({
@@ -162,7 +173,7 @@ export function useGenerateProjectCharacterImage(projectId: string) {
 export function useUploadProjectCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId), exact: false })
 
     return useMutation({
         mutationFn: async ({
@@ -199,7 +210,7 @@ export function useSelectProjectCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
     const latestRequestIdByTargetRef = useRef<Record<string, number>>({})
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId), exact: false })
 
     return useMutation({
         mutationFn: async ({
@@ -227,17 +238,21 @@ export function useSelectProjectCharacterImage(projectId: string) {
             const requestId = (latestRequestIdByTargetRef.current[targetKey] ?? 0) + 1
             latestRequestIdByTargetRef.current[targetKey] = requestId
 
-            const assetsQueryKey = queryKeys.projectAssets.all(projectId)
+            // 🔥 使用 useAssets 实际使用的 queryKey 根路径
+            const assetsQueryKey = queryKeys.assets.all('project', projectId)
             const projectQueryKey = queryKeys.projectData(projectId)
 
-            await queryClient.cancelQueries({ queryKey: assetsQueryKey })
+            await queryClient.cancelQueries({ queryKey: assetsQueryKey, exact: false })
             await queryClient.cancelQueries({ queryKey: projectQueryKey })
 
-            const previousAssets = queryClient.getQueryData<ProjectAssetsData>(assetsQueryKey)
+            const previousAssets = queryClient.getQueryData<AssetSummary[]>(assetsQueryKey)
             const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
 
-            queryClient.setQueryData<ProjectAssetsData | undefined>(assetsQueryKey, (previous) =>
-                applyCharacterSelectionToAssets(previous, variables.characterId, variables.appearanceId, variables.imageIndex),
+            // 🔥 使用 exact: false 匹配所有以 assetsQueryKey 开头的缓存
+            queryClient.setQueriesData<AssetSummary[] | undefined>(
+                { queryKey: assetsQueryKey, exact: false },
+                (previous) =>
+                    previous ? applyCharacterSelectionToAssetSummary(previous, variables.characterId, variables.appearanceId, variables.imageIndex) : previous,
             )
             queryClient.setQueryData<Project | undefined>(projectQueryKey, (previous) =>
                 applyCharacterSelectionToProject(previous, variables.characterId, variables.appearanceId, variables.imageIndex),
@@ -254,13 +269,16 @@ export function useSelectProjectCharacterImage(projectId: string) {
             if (!context) return
             const latestRequestId = latestRequestIdByTargetRef.current[context.targetKey]
             if (latestRequestId !== context.requestId) return
-            queryClient.setQueryData(queryKeys.projectAssets.all(projectId), context.previousAssets)
+            // 🔥 恢复正确的 queryKey
+            queryClient.setQueriesData(
+                { queryKey: queryKeys.assets.all('project', projectId), exact: false },
+                context.previousAssets,
+            )
             queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
         },
-        onSettled: (_data, _error, variables) => {
-            if (variables.confirm) {
-                void invalidateProjectAssets()
-            }
+        onSettled: (_data, _error, _variables) => {
+            // 🔥 无论 confirm 是什么值，都要 invalidate 确保 UI 更新
+            void invalidateProjectAssets()
         },
     })
 }
@@ -272,7 +290,7 @@ export function useSelectProjectCharacterImage(projectId: string) {
 export function useUndoProjectCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId), exact: false })
 
     return useMutation({
         mutationFn: async ({ characterId, appearanceId }: { characterId: string; appearanceId: string }) => {
@@ -298,7 +316,7 @@ export function useUndoProjectCharacterImage(projectId: string) {
 export function useDeleteProjectCharacter(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId), exact: false })
 
     return useMutation({
         mutationFn: async (characterId: string) => {
@@ -309,17 +327,18 @@ export function useDeleteProjectCharacter(projectId: string) {
             )
         },
         onMutate: async (characterId): Promise<DeleteProjectCharacterContext> => {
-            const assetsQueryKey = queryKeys.projectAssets.all(projectId)
+            const assetsQueryKey = queryKeys.assets.all('project', projectId)
             const projectQueryKey = queryKeys.projectData(projectId)
 
-            await queryClient.cancelQueries({ queryKey: assetsQueryKey })
+            await queryClient.cancelQueries({ queryKey: assetsQueryKey, exact: false })
             await queryClient.cancelQueries({ queryKey: projectQueryKey })
 
-            const previousAssets = queryClient.getQueryData<ProjectAssetsData>(assetsQueryKey)
+            const previousAssets = queryClient.getQueryData<AssetSummary[]>(assetsQueryKey)
             const previousProject = queryClient.getQueryData<Project>(projectQueryKey)
 
-            queryClient.setQueryData<ProjectAssetsData | undefined>(assetsQueryKey, (previous) =>
-                removeCharacterFromAssets(previous, characterId),
+            queryClient.setQueriesData<AssetSummary[] | undefined>(
+                { queryKey: assetsQueryKey, exact: false },
+                (previous) => previous ? removeCharacterFromAssetSummary(previous, characterId) : previous,
             )
             queryClient.setQueryData<Project | undefined>(projectQueryKey, (previous) =>
                 removeCharacterFromProject(previous, characterId),
@@ -332,7 +351,10 @@ export function useDeleteProjectCharacter(projectId: string) {
         },
         onError: (_error, _characterId, context) => {
             if (!context) return
-            queryClient.setQueryData(queryKeys.projectAssets.all(projectId), context.previousAssets)
+            queryClient.setQueriesData(
+                { queryKey: queryKeys.assets.all('project', projectId), exact: false },
+                context.previousAssets,
+            )
             queryClient.setQueryData(queryKeys.projectData(projectId), context.previousProject)
         },
         onSettled: invalidateProjectAssets,
@@ -346,7 +368,7 @@ export function useDeleteProjectCharacter(projectId: string) {
 export function useDeleteProjectAppearance(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId), exact: false })
 
     return useMutation({
         mutationFn: async ({ characterId, appearanceId }: { characterId: string; appearanceId: string }) => {
@@ -367,7 +389,7 @@ export function useDeleteProjectAppearance(projectId: string) {
 export function useUpdateProjectCharacterName(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        queryClient.invalidateQueries({ queryKey: queryKeys.assets.all('project', projectId), exact: false })
 
     return useMutation({
         mutationFn: async ({ characterId, name }: { characterId: string; name: string }) => {

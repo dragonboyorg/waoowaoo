@@ -148,7 +148,10 @@ export function useAssets(input: AssetQueryInput) {
       return data.assets
     },
     enabled: input.scope === 'global' || !!input.projectId,
-    staleTime: 5_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    // 🔥 确保 data 变化时总是触发重新渲染
+    notifyOnChangeProps: ['data', 'isFetching', 'isLoading', 'error'],
   })
 
   const taskProjectId = input.scope === 'global' ? 'global-asset-hub' : input.projectId ?? ''

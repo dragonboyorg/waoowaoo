@@ -1,17 +1,27 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
-import { invalidateQueryTemplates } from './mutation-shared'
 
 export const GLOBAL_ASSET_PROJECT_ID = 'global-asset-hub'
 
 export function invalidateGlobalCharacters(queryClient: QueryClient) {
-  return invalidateQueryTemplates(queryClient, [queryKeys.globalAssets.characters()])
+  // invalidateQueries 会标记数据为 stale，并在组件使用时重新获取
+  // exact: false 确保匹配所有以 ['global-assets', 'unified'] 开头的 key
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.assets.all('global'),
+    exact: false,
+  })
 }
 
 export function invalidateGlobalLocations(queryClient: QueryClient) {
-  return invalidateQueryTemplates(queryClient, [queryKeys.globalAssets.locations()])
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.assets.all('global'),
+    exact: false,
+  })
 }
 
 export function invalidateGlobalVoices(queryClient: QueryClient) {
-  return invalidateQueryTemplates(queryClient, [queryKeys.globalAssets.voices()])
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.assets.all('global'),
+    exact: false,
+  })
 }

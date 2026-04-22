@@ -76,6 +76,8 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [showDeleteMenu, setShowDeleteMenu] = useState(false)
     const latestSelectRequestRef = useRef(0)
+    // 🔥 本地选中状态：完全由用户点击控制，不依赖服务器状态
+    const [localSelectedIndex, setLocalSelectedIndex] = useState<number | null | undefined>(undefined)
 
     // 计算属性
     const appearance = character.appearances[activeAppearance] || character.appearances[0]
@@ -93,7 +95,9 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
     const imageUrls = appearance?.imageUrls || []
     const generatedImageCount = imageUrls.filter(u => isValidUrl(u)).length
     const hasMultipleImages = generatedImageCount > 1
-    const effectiveSelectedIndex: number | null = appearance?.selectedIndex ?? null
+    // 🔥 优先使用本地状态，如果没有则用服务器状态
+    const serverSelectedIndex: number | null = appearance?.selectedIndex ?? null
+    const effectiveSelectedIndex: number | null = localSelectedIndex !== undefined ? localSelectedIndex : serverSelectedIndex
     const currentImageUrl = appearance?.imageUrl || (effectiveSelectedIndex !== null ? imageUrls[effectiveSelectedIndex] : null) || imageUrls.find(u => u) || null
     const hasPreviousVersion = !!(appearance?.previousImageUrl || (appearance?.previousImageUrls && appearance.previousImageUrls.length > 0))
 
@@ -137,6 +141,8 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
     // 选择图片（依赖 query 缓存乐观更新）
     const handleSelectImage = (imageIndex: number | null) => {
         if (imageIndex === effectiveSelectedIndex) return
+        // 🔥 立即更新本地状态，UI 即时响应
+        setLocalSelectedIndex(imageIndex)
         const requestId = latestSelectRequestRef.current + 1
         latestSelectRequestRef.current = requestId
         selectImage.mutate({
@@ -147,8 +153,10 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
         }, {
             onError: (error) => {
                 if (latestSelectRequestRef.current !== requestId) return
+                // 🔥 失败时重置本地状态，回退到服务器状态
+                setLocalSelectedIndex(undefined)
                 alert(error.message || t('selectFailed'))
-            }
+            },
         })
     }
 

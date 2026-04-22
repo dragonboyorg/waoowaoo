@@ -19,6 +19,7 @@ import {
 import { findBuiltinCapabilities } from '@/lib/model-capabilities/catalog'
 import { findBuiltinPricingCatalogEntry } from '@/lib/model-pricing/catalog'
 import type { VideoPricingTier } from '@/lib/model-pricing/video-tier'
+import { logInfo as _logInfo } from '@/lib/logging/core'
 
 type StoredModelType = UnifiedModelType | string
 
@@ -217,6 +218,10 @@ export const GET = apiHandler(async () => {
 
     if (provider && modelId) {
       const capabilities = findBuiltinCapabilities(modelType, provider, modelId)
+      // 🔥 DEBUG: 检查 capabilities 解析
+      if (modelType === 'image') {
+        _logInfo(`[API /user/models] modelType=${modelType}, provider=${provider}, modelId=${modelId}, capabilities=${capabilities ? JSON.stringify(capabilities) : '(none)'}`)
+      }
       if (capabilities) {
         option.capabilities = capabilities
       }

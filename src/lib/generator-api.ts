@@ -12,7 +12,6 @@ import { createAudioGenerator, createImageGenerator, createVideoGenerator } from
 import type { GenerateResult } from './generators/base'
 import { getProviderConfig, getProviderKey, resolveModelSelection } from './api-config'
 import {
-    generateImageViaOpenAICompat,
     generateImageViaOpenAICompatTemplate,
     generateVideoViaOpenAICompat,
     generateVideoViaOpenAICompatTemplate,
@@ -22,23 +21,6 @@ import { generateBailianAudio, generateBailianImage, generateBailianVideo } from
 import { generateSiliconFlowAudio, generateSiliconFlowImage, generateSiliconFlowVideo } from './providers/siliconflow'
 
 const OFFICIAL_ONLY_PROVIDER_KEYS = new Set(['bailian', 'siliconflow'])
-
-/**
- * 将 aspectRatio 映射为 OpenAI 兼容的 size
- */
-function aspectRatioToOpenAISize(aspectRatio: string | undefined): string | undefined {
-    if (!aspectRatio) return undefined
-    const ratio = aspectRatio.trim()
-    // OpenAI 支持的尺寸: 1024x1024, 1792x1024, 1024x1792, 1536x1024, 1024x1536
-    const mapping: Record<string, string> = {
-        '1:1': '1024x1024',
-        '16:9': '1792x1024',
-        '9:16': '1024x1792',
-        '3:2': '1536x1024',
-        '2:3': '1024x1536',
-    }
-    return mapping[ratio] || undefined
-}
 
 /**
  * 生成图片（简化版）
@@ -61,6 +43,16 @@ export async function generateImage(
         size?: string  // 🔥 直接指定像素尺寸如 "5016x3344"（优先于 aspectRatio）
     }
 ): Promise<GenerateResult> {
+    // 🔥 DEBUG: 入口参数
+    _ulogInfo(`[generateImage] ENTRY: modelKey=${modelKey}, options=${JSON.stringify({
+        aspectRatio: options?.aspectRatio,
+        resolution: options?.resolution,
+        size: options?.size,
+        outputFormat: options?.outputFormat,
+        keepOriginalAspectRatio: options?.keepOriginalAspectRatio,
+        referenceImagesCount: options?.referenceImages?.length ?? 0,
+    })}`)
+
     const selection = await resolveModelSelection(userId, modelKey, 'image')
     _ulogInfo(`[generateImage] resolved model selection: ${selection.modelKey}`)
     const providerConfig = await getProviderConfig(userId, selection.provider)
@@ -103,54 +95,40 @@ export async function generateImage(
 
     // 调用生成（提取 referenceImages 单独传递，其余选项合并进 options）
     const { referenceImages, ...generatorOptions } = options || {}
+    _ulogInfo(`[generateImage] AFTER_SPLIT: generatorOptions=${JSON.stringify({
+        aspectRatio: generatorOptions.aspectRatio,
+        resolution: generatorOptions.resolution,
+        size: generatorOptions.size,
+        outputFormat: generatorOptions.outputFormat,
+        keepOriginalAspectRatio: generatorOptions.keepOriginalAspectRatio,
+    })}, gatewayRoute=${gatewayRoute}, providerKey=${providerKey}`)
+
     if (gatewayRoute === 'openai-compat') {
         const compatTemplate = selection.compatMediaTemplate
-        if (providerKey === 'openai-compatible' && !compatTemplate) {
-            throw new Error(`MODEL_COMPAT_MEDIA_TEMPLATE_REQUIRED: ${selection.modelKey}`)
-        }
-        if (compatTemplate) {
-            return await generateImageViaOpenAICompatTemplate({
-                userId,
-                providerId: selection.provider,
-                modelId: selection.modelId,
-                modelKey: selection.modelKey,
-                prompt,
-                referenceImages,
-                options: {
-                    ...generatorOptions,
-                    provider: selection.provider,
-                    modelId: selection.modelId,
-                    modelKey: selection.modelKey,
-                },
-                profile: 'openai-compatible',
-                template: compatTemplate,
-            })
-        }
+        _ulogInfo(`[generateImage] OPENAI_COMPAT: compatTemplate=${compatTemplate ? 'YES' : 'NO'}, will use default template if missing`)
 
-        // OpenAI 兼容模式：将 aspectRatio 转换为 size
-        let openaiCompatOptions = { ...generatorOptions }
-        if (openaiCompatOptions.aspectRatio) {
-            const mappedSize = aspectRatioToOpenAISize(openaiCompatOptions.aspectRatio)
-            if (mappedSize && !openaiCompatOptions.size) {
-                openaiCompatOptions = { ...openaiCompatOptions, size: mappedSize }
-            }
-            // 移除不支持的 aspectRatio
-            delete openaiCompatOptions.aspectRatio
-        }
-
-        return await generateImageViaOpenAICompat({
+        // 统一使用 generateImageViaOpenAICompatTemplate，它内部会自动使用默认模板
+        _ulogInfo(`[generateImage] TEMPLATE_PATH: options passed to template=${JSON.stringify({
+            ...generatorOptions,
+            provider: selection.provider,
+            modelId: selection.modelId,
+            modelKey: selection.modelKey,
+        })}`)
+        return await generateImageViaOpenAICompatTemplate({
             userId,
             providerId: selection.provider,
             modelId: selection.modelId,
+            modelKey: selection.modelKey,
             prompt,
             referenceImages,
             options: {
-                ...openaiCompatOptions,
+                ...generatorOptions,
                 provider: selection.provider,
                 modelId: selection.modelId,
                 modelKey: selection.modelKey,
             },
             profile: 'openai-compatible',
+            template: compatTemplate,
         })
     }
 

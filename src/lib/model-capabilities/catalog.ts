@@ -166,6 +166,28 @@ const CAPABILITY_PROVIDER_ALIASES: Readonly<Record<string, string>> = {
   'gemini-compatible': 'google',
 }
 
+/**
+ * Default capabilities for providers that support arbitrary model IDs.
+ * Used when no exact catalog match is found.
+ * Structure: { providerKey: { modelType: ModelCapabilities } }
+ */
+const DEFAULT_PROVIDER_CAPABILITIES: Readonly<Record<string, Readonly<Record<string, ModelCapabilities>>>> = {
+  'openai-compatible': {
+    image: {
+      image: {
+        resolutionOptions: ['1K', '2K', '4K'],
+      },
+    },
+  },
+  'gemini-compatible': {
+    image: {
+      image: {
+        resolutionOptions: ['1K', '2K', '4K'],
+      },
+    },
+  },
+}
+
 export function findBuiltinCapabilityCatalogEntry(
   modelType: UnifiedModelType,
   provider: string,
@@ -204,6 +226,17 @@ export function findBuiltinCapabilityCatalogEntry(
         ...aliasMatch,
         capabilities: cloneCapabilities(aliasMatch.capabilities),
       }
+    }
+  }
+
+  // Fallback: check provider-level default capabilities (e.g. openai-compatible)
+  const providerDefaults = DEFAULT_PROVIDER_CAPABILITIES[providerKey]
+  if (providerDefaults && providerDefaults[modelType]) {
+    return {
+      modelType,
+      provider: providerKey,
+      modelId,
+      capabilities: cloneCapabilities(providerDefaults[modelType] as ModelCapabilities),
     }
   }
 

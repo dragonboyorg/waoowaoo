@@ -1,3 +1,4 @@
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import type { GenerateResult } from '@/lib/generators/base'
 import type { OpenAICompatImageRequest } from '../types'
 import {
@@ -159,6 +160,9 @@ export async function generateImageViaOpenAICompat(request: OpenAICompatImageReq
     options = {},
   } = request
 
+  // 🔥 DEBUG: 入口参数
+  _ulogInfo(`[generateImageViaOpenAICompat] ENTRY: userId=${userId}, providerId=${providerId}, modelId=${modelId || '(none)'}, options=${JSON.stringify(options)}, referenceImagesCount=${referenceImages.length}`)
+
   assertAllowedOptions(options)
   const config = await resolveOpenAICompatClientConfig(userId, providerId)
   const client = createOpenAICompatClient(config)
@@ -168,7 +172,14 @@ export async function generateImageViaOpenAICompat(request: OpenAICompatImageReq
   const outputFormat = normalizeOutputFormat(options.outputFormat)
   const quality = normalizeGenerateQuality(options.quality)
   const rawSize = resolveRawSize(options)
+
+  // 🔥 DEBUG: 尺寸处理
+  _ulogInfo(`[generateImageViaOpenAICompat] SIZE_RESOLVE: rawSize=${rawSize || '(none)'}, options.size=${options.size || '(none)'}, options.resolution=${options.resolution || '(none)'}`)
+
   const size = normalizeOpenAIImageSize(rawSize)
+
+  // 🔥 DEBUG: 最终参数
+  _ulogInfo(`[generateImageViaOpenAICompat] FINAL: model=${normalizedModelId}, size=${size || '(none)'}, responseFormat=${responseFormat}, outputFormat=${outputFormat || '(none)'}, quality=${quality || '(none)'}`)
 
   if (referenceImages.length > 0) {
     const response = await client.images.edit({

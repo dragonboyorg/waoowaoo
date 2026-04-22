@@ -16,8 +16,11 @@ import {
     GeminiCompatibleImageGenerator,
     OpenAICompatibleImageGenerator,
 } from './image'
-import { GoogleVeoVideoGenerator } from './video/google'
-import { OpenAICompatibleVideoGenerator } from './video'
+import {
+    GoogleVeoVideoGenerator,
+    GeminiCompatibleVideoGenerator,
+    OpenAICompatibleVideoGenerator,
+} from './video'
 import { MinimaxVideoGenerator } from './minimax'
 import { ViduVideoGenerator } from './vidu'
 import { getProviderKey } from '@/lib/api-config'
@@ -75,7 +78,7 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
 /**
  * 根据 provider 创建视频生成器
  */
-export function createVideoGenerator(provider: string): VideoGenerator {
+export function createVideoGenerator(provider: string, modelId?: string): VideoGenerator {
     const providerKey = getProviderKey(provider).toLowerCase()
     switch (providerKey) {
         case 'fal':
@@ -85,7 +88,7 @@ export function createVideoGenerator(provider: string): VideoGenerator {
         case 'google':
             return new GoogleVeoVideoGenerator()
         case 'gemini-compatible':
-            return new GoogleVeoVideoGenerator(provider)
+            return new GeminiCompatibleVideoGenerator(modelId, provider)
         case 'minimax':
             return new MinimaxVideoGenerator()
         case 'vidu':

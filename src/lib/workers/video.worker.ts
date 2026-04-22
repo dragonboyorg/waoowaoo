@@ -6,6 +6,7 @@ import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { getUserWorkflowConcurrencyConfig } from '@/lib/config-service'
 import { reportTaskProgress, withTaskLifecycle } from './shared'
 import { withUserConcurrencyGate } from './user-concurrency-gate'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import {
   assertTaskActive,
   getProjectModels,
@@ -85,6 +86,8 @@ async function generateVideoForPanel(
   projectVideoRatio: string | null | undefined,
   generationOptions: VideoOptionMap,
 ): Promise<{ cosKey: string; generationMode: VideoGenerationMode; actualVideoTokens?: number }> {
+  _ulogInfo(`[video.worker] generateVideoForPanel ENTRY: modelId=${modelId}, panelId=${panel.id}`)
+
   if (!panel.imageUrl) {
     throw new Error(`Panel ${panel.id} has no imageUrl`)
   }
@@ -97,6 +100,8 @@ async function generateVideoForPanel(
   const persistedFirstLastPrompt = firstLastFramePayload ? panel.firstLastFramePrompt : null
   const customPrompt = typeof payload.customPrompt === 'string' ? payload.customPrompt : null
   const prompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.videoPrompt || panel.description
+  _ulogInfo(`[video.worker] PROMPT: ${prompt?.slice(0, 100) || 'none'}`)
+
   if (!prompt) {
     throw new Error(`Panel ${panel.id} has no video prompt`)
   }
@@ -105,7 +110,9 @@ async function generateVideoForPanel(
   if (!sourceImageUrl) {
     throw new Error(`Panel ${panel.id} image url invalid`)
   }
+  _ulogInfo(`[video.worker] SOURCE IMAGE URL: ${sourceImageUrl.slice(0, 80)}...`)
   const sourceImageBase64 = await normalizeToBase64ForGeneration(sourceImageUrl)
+  _ulogInfo(`[video.worker] SOURCE IMAGE BASE64: ${sourceImageBase64.slice(0, 50)}... (len=${sourceImageBase64.length})`)
 
   let lastFrameImageBase64: string | undefined
   const generationMode: VideoGenerationMode = firstLastFramePayload ? 'firstlastframe' : 'normal'
@@ -113,6 +120,7 @@ async function generateVideoForPanel(
     ? generationOptions.generateAudio
     : undefined
   let model = modelId
+  _ulogInfo(`[video.worker] GENERATION MODE: ${generationMode}`)
 
   if (firstLastFramePayload) {
     model =
@@ -141,6 +149,7 @@ async function generateVideoForPanel(
     }
   }
 
+  _ulogInfo(`[video.worker] CALLING resolveVideoSourceFromGeneration: userId=${job.data.userId}, model=${model}`)
   const generatedVideo = await resolveVideoSourceFromGeneration(job, {
     userId: job.data.userId,
     modelId: model,
@@ -154,6 +163,7 @@ async function generateVideoForPanel(
       ...(lastFrameImageBase64 ? { lastFrameImageUrl: lastFrameImageBase64 } : {}),
     },
   })
+  _ulogInfo(`[video.worker] VIDEO SOURCE RETURNED: url=${generatedVideo.url?.slice(0, 80) || 'none'}, hasDownloadHeaders=${!!generatedVideo.downloadHeaders}`)
 
   let downloadHeaders: Record<string, string> | undefined
   const videoSource = generatedVideo.url
@@ -185,17 +195,22 @@ async function handleVideoPanelTask(job: Job<TaskJobData>) {
   const projectModels = await getProjectModels(job.data.projectId, job.data.userId)
 
   const modelId = typeof payload.videoModel === 'string' ? payload.videoModel.trim() : ''
+  _ulogInfo(`[video.worker] TASK START: taskId=${job.data.taskId}, modelId=${modelId}, projectId=${job.data.projectId}`)
+
   if (!modelId) throw new Error('VIDEO_MODEL_REQUIRED: payload.videoModel is required')
 
   const panel = await getPanelForVideoTask(job)
+  _ulogInfo(`[video.worker] PANEL FOUND: panelId=${panel.id}, hasImageUrl=${!!panel.imageUrl}, videoPrompt=${panel.videoPrompt?.slice(0, 50) || 'none'}`)
 
   const generationOptions = extractGenerationOptions(payload)
+  _ulogInfo(`[video.worker] GENERATION OPTIONS: ${JSON.stringify(generationOptions)}`)
 
   await reportTaskProgress(job, 10, {
     stage: 'generate_panel_video',
     panelId: panel.id,
   })
 
+  _ulogInfo(`[video.worker] CALLING generateVideoForPanel...`)
   const { cosKey, generationMode, actualVideoTokens } = await generateVideoForPanel(
     job,
     panel,
@@ -204,6 +219,7 @@ async function handleVideoPanelTask(job: Job<TaskJobData>) {
     projectModels.videoRatio,
     generationOptions,
   )
+  _ulogInfo(`[video.worker] VIDEO GENERATED: cosKey=${cosKey}, generationMode=${generationMode}`)
 
   await assertTaskActive(job, 'persist_panel_video')
   await prisma.novelPromotionPanel.update({

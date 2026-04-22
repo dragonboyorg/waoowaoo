@@ -10,6 +10,7 @@ import { BillingOperationError } from '@/lib/billing/errors'
 import { hasPanelVideoOutput } from '@/lib/task/has-output'
 import { withTaskUiPayload } from '@/lib/task/ui-payload'
 import { parseModelKeyStrict, type CapabilityValue } from '@/lib/model-config-contract'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import {
   resolveBuiltinCapabilitiesByModelKey,
 } from '@/lib/model-capabilities/lookup'
@@ -186,13 +187,26 @@ export const POST = apiHandler(async (
   context: { params: Promise<{ projectId: string }> },
 ) => {
   const { projectId } = await context.params
+  _ulogInfo(`[generate-video API] ENTRY: projectId=${projectId}`)
 
   const authResult = await requireProjectAuthLight(projectId)
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
+  _ulogInfo(`[generate-video API] AUTH OK: userId=${session.user.id}`)
 
   const body = await request.json()
+  _ulogInfo(`[generate-video API] BODY: ${JSON.stringify({
+    videoModel: body?.videoModel,
+    storyboardId: body?.storyboardId,
+    panelIndex: body?.panelIndex,
+    all: body?.all,
+    episodeId: body?.episodeId,
+    firstLastFrame: body?.firstLastFrame ? 'present' : 'none',
+    generationOptions: body?.generationOptions,
+  })}`)
+
   requireVideoModelKeyFromPayload(body)
+  _ulogInfo(`[generate-video API] MODEL KEY VALID: ${body?.videoModel}`)
   const locale = resolveRequiredTaskLocale(request, body)
   const isBatch = body?.all === true
 
@@ -208,6 +222,7 @@ export const POST = apiHandler(async (
     if (!episodeId) {
       throw new ApiError('INVALID_PARAMS')
     }
+    _ulogInfo(`[generate-video API] BATCH MODE: episodeId=${episodeId}`)
 
     const panels = await prisma.novelPromotionPanel.findMany({
       where: {
@@ -221,10 +236,13 @@ export const POST = apiHandler(async (
       select: { id: true },
     })
 
+    _ulogInfo(`[generate-video API] BATCH PANELS FOUND: ${panels.length} panels need video`)
+
     if (panels.length === 0) {
       return NextResponse.json({ tasks: [], total: 0 })
     }
 
+    _ulogInfo(`[generate-video API] BATCH SUBMITTING TASKS...`)
     const results = await Promise.all(
       panels.map(async (panel) =>
         submitTask({
@@ -245,6 +263,7 @@ export const POST = apiHandler(async (
       ),
     )
 
+    _ulogInfo(`[generate-video API] BATCH TASKS SUBMITTED: ${results.length} tasks`)
     return NextResponse.json({ tasks: results, total: panels.length })
   }
 
@@ -253,6 +272,7 @@ export const POST = apiHandler(async (
   if (!storyboardId || panelIndex === undefined) {
     throw new ApiError('INVALID_PARAMS')
   }
+  _ulogInfo(`[generate-video API] SINGLE MODE: storyboardId=${storyboardId}, panelIndex=${panelIndex}`)
 
   const panel = await prisma.novelPromotionPanel.findFirst({
     where: { storyboardId, panelIndex: Number(panelIndex) },
@@ -260,9 +280,12 @@ export const POST = apiHandler(async (
   })
 
   if (!panel) {
+    _ulogInfo(`[generate-video API] PANEL NOT FOUND`)
     throw new ApiError('NOT_FOUND')
   }
+  _ulogInfo(`[generate-video API] PANEL FOUND: panelId=${panel.id}`)
 
+  _ulogInfo(`[generate-video API] SUBMITTING SINGLE TASK...`)
   const result = await submitTask({
     userId: session.user.id,
     locale,
@@ -277,6 +300,8 @@ export const POST = apiHandler(async (
     dedupeKey: `video_panel:${panel.id}`,
     billingInfo: buildVideoPanelBillingInfoOrThrow(body),
   })
+
+  _ulogInfo(`[generate-video API] TASK SUBMITTED: taskId=${result?.taskId || result?.id || 'unknown'}`)
 
   return NextResponse.json(result)
 })

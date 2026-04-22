@@ -1,5 +1,6 @@
 import type { GenerateResult } from '@/lib/generators/base'
 import type { OpenAICompatVideoRequest } from '../types'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import {
   buildRenderedTemplateRequest,
   buildTemplateVariables,
@@ -43,6 +44,9 @@ function resolveModelRef(request: OpenAICompatVideoRequest): string {
 export async function generateVideoViaOpenAICompatTemplate(
   request: OpenAICompatVideoRequest,
 ): Promise<GenerateResult> {
+  _ulogInfo(`[template-video] ENTRY: userId=${request.userId}, providerId=${request.providerId}, modelId=${request.modelId}`)
+  _ulogInfo(`[template-video] TEMPLATE INFO: mediaType=${request.template?.mediaType}, mode=${request.template?.mode}, createEndpoint=${request.template?.create?.path}`)
+
   if (!request.template) {
     throw buildUnsupportedVideoFormatError('OPENAI_COMPAT_VIDEO_TEMPLATE_REQUIRED')
   }
@@ -51,6 +55,8 @@ export async function generateVideoViaOpenAICompatTemplate(
   }
 
   const config = await resolveOpenAICompatClientConfig(request.userId, request.providerId)
+  _ulogInfo(`[template-video] CLIENT CONFIG: baseUrl=${config.baseUrl?.slice(0, 50) || 'none'}, hasApiKey=${!!config.apiKey}`)
+
   const variables = buildTemplateVariables({
     model: request.modelId || '',
     prompt: request.prompt,
@@ -69,14 +75,18 @@ export async function generateVideoViaOpenAICompatTemplate(
     variables,
     defaultAuthHeader: `Bearer ${config.apiKey}`,
   })
+  _ulogInfo(`[template-video] CREATE REQUEST: endpointUrl=${createRequest.endpointUrl}, method=${createRequest.method}`)
+
   if (['POST', 'PUT', 'PATCH'].includes(createRequest.method) && !createRequest.body) {
     throw buildUnsupportedVideoFormatError('OPENAI_COMPAT_VIDEO_TEMPLATE_CREATE_BODY_REQUIRED')
   }
+  _ulogInfo(`[template-video] FETCHING: ${createRequest.endpointUrl}`)
   const createResponse = await fetch(createRequest.endpointUrl, {
     method: createRequest.method,
     headers: createRequest.headers,
     ...(createRequest.body ? { body: createRequest.body } : {}),
   })
+  _ulogInfo(`[template-video] RESPONSE: status=${createResponse.status}`)
   const rawText = await createResponse.text().catch(() => '')
   const payload = normalizeResponseJson(rawText)
 

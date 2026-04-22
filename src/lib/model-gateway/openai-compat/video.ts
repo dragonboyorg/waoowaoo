@@ -3,6 +3,7 @@ import type { GenerateResult } from '@/lib/generators/base'
 import type { OpenAICompatVideoRequest } from '../types'
 import { createOpenAICompatClient, parseDataUrl, resolveOpenAICompatClientConfig } from './common'
 import { toFile } from 'openai'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 
 type OpenAIVideoSize = '720x1280' | '1280x720' | '1024x1792' | '1792x1024'
 type OpenAIVideoSeconds = '4' | '8' | '12'
@@ -155,8 +156,18 @@ export async function generateVideoViaOpenAICompat(request: OpenAICompatVideoReq
     options = {},
   } = request
 
+  _ulogInfo(`[openai-compat-video] ENTRY: userId=${userId}, providerId=${providerId}, modelId=${modelId}`)
+  _ulogInfo(`[openai-compat-video] OPTIONS: ${JSON.stringify({
+    prompt: prompt?.slice(0, 50),
+    duration: options.duration,
+    size: options.size,
+    resolution: options.resolution,
+    aspectRatio: options.aspectRatio,
+  })}`)
+
   assertAllowedOptions(options)
   const config = await resolveOpenAICompatClientConfig(userId, providerId)
+  _ulogInfo(`[openai-compat-video] CLIENT CONFIG: baseUrl=${config.baseUrl?.slice(0, 50) || 'none'}, hasApiKey=${!!config.apiKey}`)
   const client = createOpenAICompatClient(config)
 
   const selectedModelId = normalizeModel(modelId || options.modelId)
@@ -167,6 +178,9 @@ export async function generateVideoViaOpenAICompat(request: OpenAICompatVideoReq
     throw new Error('OPENAI_COMPAT_VIDEO_PROMPT_REQUIRED')
   }
 
+  _ulogInfo(`[openai-compat-video] FINAL PARAMS: model=${selectedModelId}, seconds=${seconds}, size=${size}`)
+  _ulogInfo(`[openai-compat-video] CREATING VIDEO via client.videos.create...`)
+
   const inputReference = await toUploadFileFromImageUrl(imageUrl)
   const response = await client.videos.create({
     prompt: trimmedPrompt,
@@ -175,6 +189,8 @@ export async function generateVideoViaOpenAICompat(request: OpenAICompatVideoReq
     ...(size ? { size } : {}),
     input_reference: inputReference,
   } as Parameters<typeof client.videos.create>[0])
+
+  _ulogInfo(`[openai-compat-video] RESPONSE: id=${response.id}`)
 
   if (!response.id || typeof response.id !== 'string') {
     throw new Error('OPENAI_COMPAT_VIDEO_CREATE_INVALID_RESPONSE: missing video id')

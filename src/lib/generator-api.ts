@@ -87,10 +87,11 @@ export async function generateImage(
     let gatewayRoute = OFFICIAL_ONLY_PROVIDER_KEYS.has(providerKey)
         ? 'official'
         : (providerConfig.gatewayRoute || defaultGatewayRoute)
+
+    // 🔥 gemini-compatible: 强制使用 official generator（使用 baseUrl 调用兼容 API）
+    // 忽略数据库中可能存在的错误 gatewayRoute 配置
     if (providerKey === 'gemini-compatible') {
-        // DEPRECATED: historical rows persisted gemini-compatible as openai-compat by default.
-        // Runtime now resolves route by apiMode to avoid requiring data migration SQL.
-        gatewayRoute = providerConfig.apiMode === 'openai-official' ? 'openai-compat' : 'official'
+        gatewayRoute = 'official'
     }
 
     // 调用生成（提取 referenceImages 单独传递，其余选项合并进 options）
@@ -169,10 +170,23 @@ export async function generateVideo(
         [key: string]: string | number | boolean | undefined
     }
 ): Promise<GenerateResult> {
+    _ulogInfo(`[generateVideo] ENTRY: userId=${userId}, modelKey=${modelKey}`)
+    _ulogInfo(`[generateVideo] OPTIONS: ${JSON.stringify({
+        prompt: options?.prompt?.slice(0, 50),
+        duration: options?.duration,
+        resolution: options?.resolution,
+        aspectRatio: options?.aspectRatio,
+        generateAudio: options?.generateAudio,
+        hasLastFrame: !!options?.lastFrameImageUrl,
+    })}`)
+
     const selection = await resolveModelSelection(userId, modelKey, 'video')
-    _ulogInfo(`[generateVideo] resolved model selection: ${selection.modelKey}`)
+    _ulogInfo(`[generateVideo] MODEL SELECTION: provider=${selection.provider}, modelId=${selection.modelId}, modelKey=${selection.modelKey}`)
     const providerKey = getProviderKey(selection.provider).toLowerCase()
+    _ulogInfo(`[generateVideo] PROVIDER KEY: ${providerKey}`)
+
     if (providerKey === 'bailian') {
+        _ulogInfo(`[generateVideo] ROUTING TO: bailian`)
         return await generateBailianVideo({
             userId,
             imageUrl,
@@ -186,6 +200,7 @@ export async function generateVideo(
         })
     }
     if (providerKey === 'siliconflow') {
+        _ulogInfo(`[generateVideo] ROUTING TO: siliconflow`)
         return await generateSiliconFlowVideo({
             userId,
             imageUrl,
@@ -199,18 +214,31 @@ export async function generateVideo(
         })
     }
     const providerConfig = await getProviderConfig(userId, selection.provider)
+    _ulogInfo(`[generateVideo] PROVIDER CONFIG: baseUrl=${providerConfig.baseUrl?.slice(0, 50) || 'none'}, gatewayRoute=${providerConfig.gatewayRoute}, apiMode=${providerConfig.apiMode}`)
+
     const defaultGatewayRoute = resolveModelGatewayRoute(selection.provider)
-    const gatewayRoute = OFFICIAL_ONLY_PROVIDER_KEYS.has(providerKey)
+    let gatewayRoute = OFFICIAL_ONLY_PROVIDER_KEYS.has(providerKey)
         ? 'official'
         : (providerConfig.gatewayRoute || defaultGatewayRoute)
 
+    // 🔥 gemini-compatible: 强制使用 official generator（使用 baseUrl 调用兼容 API）
+    // 忽略数据库中可能存在的错误 gatewayRoute 配置
+    if (providerKey === 'gemini-compatible') {
+        gatewayRoute = 'official'
+    }
+
+    _ulogInfo(`[generateVideo] GATEWAY ROUTE: default=${defaultGatewayRoute}, resolved=${gatewayRoute}`)
+
     const { prompt, ...providerOptions } = options || {}
     if (gatewayRoute === 'openai-compat') {
+        _ulogInfo(`[generateVideo] ROUTING TO: openai-compat`)
         const compatTemplate = selection.compatMediaTemplate
+        _ulogInfo(`[generateVideo] COMPAT TEMPLATE: ${compatTemplate ? 'present' : 'none'}`)
         if (providerKey === 'openai-compatible' && !compatTemplate) {
             throw new Error(`MODEL_COMPAT_MEDIA_TEMPLATE_REQUIRED: ${selection.modelKey}`)
         }
         if (compatTemplate) {
+            _ulogInfo(`[generateVideo] CALLING: generateVideoViaOpenAICompatTemplate`)
             return await generateVideoViaOpenAICompatTemplate({
                 userId,
                 providerId: selection.provider,
@@ -229,6 +257,7 @@ export async function generateVideo(
             })
         }
 
+        _ulogInfo(`[generateVideo] CALLING: generateVideoViaOpenAICompat (no template)`)
         return await generateVideoViaOpenAICompat({
             userId,
             providerId: selection.provider,
@@ -246,6 +275,7 @@ export async function generateVideo(
         })
     }
 
+    _ulogInfo(`[generateVideo] ROUTING TO: official generator (provider=${selection.provider})`)
     const generator = createVideoGenerator(selection.provider)
     return await generator.generate({
         userId,

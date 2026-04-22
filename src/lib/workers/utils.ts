@@ -1,6 +1,6 @@
 import sharp from 'sharp'
 import { type Job } from 'bullmq'
-import { createScopedLogger } from '@/lib/logging/core'
+import { createScopedLogger, logInfo as _ulogInfo } from '@/lib/logging/core'
 import { withLogContext } from '@/lib/logging/context'
 import { generateImage, generateVideo } from '@/lib/generator-api'
 import { generateLipSync } from '@/lib/lipsync'
@@ -428,6 +428,17 @@ export async function resolveVideoSourceFromGeneration(
   const logger = scopedWorkerUtilLogger(job, 'worker.video.generate_source')
   const startedAt = Date.now()
 
+  _ulogInfo(`[resolveVideoSource] ENTRY: userId=${params.userId}, modelId=${params.modelId}`)
+  _ulogInfo(`[resolveVideoSource] OPTIONS: ${JSON.stringify({
+    prompt: params.options?.prompt?.slice(0, 50),
+    duration: params.options?.duration,
+    resolution: params.options?.resolution,
+    aspectRatio: params.options?.aspectRatio,
+    generationMode: params.options?.generationMode,
+    generateAudio: params.options?.generateAudio,
+    hasLastFrame: !!params.options?.lastFrameImageUrl,
+  })}`)
+
   // 服务重启续接：若 DB 中已有 externalId，直接恢复轮询，不重新提交外部 API（避免重复扣费）
   const resumeExternalId = await getTaskExistingExternalId(job.data.taskId)
   if (resumeExternalId) {
@@ -482,6 +493,7 @@ export async function resolveVideoSourceFromGeneration(
     modelKey: params.modelId,
     runtimeSelections,
   })
+  _ulogInfo(`[resolveVideoSource] CAPABILITY OPTIONS: ${JSON.stringify(capabilityOptions)}`)
 
   const providerCapabilityOptions: Record<string, string | number | boolean> = { ...capabilityOptions }
   delete providerCapabilityOptions.generationMode
@@ -491,6 +503,12 @@ export async function resolveVideoSourceFromGeneration(
     providerRequestOptions[key] = value
   }
 
+  _ulogInfo(`[resolveVideoSource] CALLING generateVideo: userId=${params.userId}, modelId=${params.modelId}, imageUrlLen=${params.imageUrl?.length || 0}`)
+  _ulogInfo(`[resolveVideoSource] FINAL OPTIONS TO generateVideo: ${JSON.stringify({
+    ...providerRequestOptions,
+    ...providerCapabilityOptions,
+  })}`)
+
   const result = await withLogContext(
     { projectId: job.data.projectId, taskId: job.data.taskId, userId: params.userId },
     () => generateVideo(params.userId, params.modelId, params.imageUrl, {
@@ -498,6 +516,7 @@ export async function resolveVideoSourceFromGeneration(
       ...providerCapabilityOptions,
     }),
   )
+  _ulogInfo(`[resolveVideoSource] generateVideo RESULT: success=${result.success}, videoUrl=${result.videoUrl?.slice(0, 80) || 'none'}, async=${result.async}, externalId=${result.externalId?.slice(0, 30) || 'none'}`)
   if (!result.success) {
     throw new Error(result.error || 'Video generation failed')
   }

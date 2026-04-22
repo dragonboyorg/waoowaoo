@@ -108,6 +108,15 @@ async function attachMediaFieldsToPanel<T extends Record<string, unknown>>(panel
     candidateMediaUrls.push(media?.url || candidate)
   }
 
+  // Determine video URLs: prefer resolved media URLs, fall back to existing valid URLs
+  const isAlreadyValidUrl = (url: unknown): boolean => {
+    if (typeof url !== 'string') return false
+    return url.startsWith('/m/') || url.startsWith('http://') || url.startsWith('https://')
+  }
+
+  const videoUrl = videoMedia?.url || (isAlreadyValidUrl(panel.videoUrl) ? panel.videoUrl : null)
+  const lipSyncVideoUrl = lipSyncVideoMedia?.url || (isAlreadyValidUrl(panel.lipSyncVideoUrl) ? panel.lipSyncVideoUrl : null)
+
   return {
     ...panel,
     media: imageMedia,
@@ -117,8 +126,8 @@ async function attachMediaFieldsToPanel<T extends Record<string, unknown>>(panel
     sketchImageMedia,
     previousImageMedia,
     imageUrl: imageMedia?.url || panel.imageUrl || null,
-    videoUrl: videoMedia?.url || panel.videoUrl || null,
-    lipSyncVideoUrl: lipSyncVideoMedia?.url || panel.lipSyncVideoUrl || null,
+    videoUrl,
+    lipSyncVideoUrl,
     sketchImageUrl: sketchImageMedia?.url || panel.sketchImageUrl || null,
     previousImageUrl: previousImageMedia?.url || panel.previousImageUrl || null,
     candidateImages: candidateRaw.length > 0 ? JSON.stringify(candidateMediaUrls) : panel.candidateImages,

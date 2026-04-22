@@ -9,6 +9,12 @@ interface VideoPanelCardHeaderProps {
   runtime: VideoPanelRuntime
 }
 
+function isPlayableVideoUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  // Valid URLs: /m/ route, signed URLs, or direct http(s) URLs
+  return url.startsWith('/m/') || url.startsWith('/api/') || url.startsWith('http://') || url.startsWith('https://')
+}
+
 export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderProps) {
   const {
     t,
@@ -30,12 +36,14 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
     setErrorDismissed(false)
   }, [taskStatus.panelErrorDisplay?.message])
 
-  const hasVisibleBaseVideo = !!media.baseVideoUrl
+  const hasPlayableVideo = isPlayableVideoUrl(media.currentVideoUrl)
+  const hasVisibleBaseVideo = isPlayableVideoUrl(media.baseVideoUrl)
+  const hasExistingVideo = !!panel.videoUrl // Raw check for video existence (for regenerate button)
   const showFirstLastFrameSwitch = layout.hasNext
 
   return (
     <div className="bg-[var(--glass-bg-muted)] flex items-center justify-center relative" style={{ aspectRatio: player.cssAspectRatio }}>
-      {hasVisibleBaseVideo && player.isPlaying ? (
+      {hasPlayableVideo && player.isPlaying ? (
         <video
           ref={player.videoRef}
           key={`video-${panel.storyboardId}-${panel.panelIndex}-${media.currentVideoUrl}`}
@@ -44,8 +52,9 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
           playsInline
           className="w-full h-full object-contain bg-black"
           onEnded={() => player.setIsPlaying(false)}
+          onError={() => player.setIsPlaying(false)}
         />
-      ) : hasVisibleBaseVideo ? (
+      ) : hasPlayableVideo ? (
         <div
           className="relative w-full h-full group cursor-pointer"
           onClick={() => void player.handlePlayClick()}
@@ -113,7 +122,7 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
       )}
 
       {/* 口型同步切换 */}
-      {panel.lipSyncVideoUrl && hasVisibleBaseVideo ? (
+      {isPlayableVideoUrl(panel.lipSyncVideoUrl) && hasPlayableVideo ? (
         <div
           className="absolute top-2 right-2 flex items-center bg-[var(--glass-overlay)] rounded-full p-0.5 cursor-pointer"
           onClick={(event) => {
@@ -132,7 +141,7 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
       ) : null}
 
       {/* 重新生成按钮 */}
-      {!layout.isLinked && !layout.isLastFrame && (hasVisibleBaseVideo || taskStatus.isVideoTaskRunning) && (
+      {!layout.isLinked && !layout.isLastFrame && (hasExistingVideo || taskStatus.isVideoTaskRunning) && (
         <button
           onClick={() =>
             actions.onGenerateVideo(

@@ -175,10 +175,10 @@ export function addSignedUrlsToStoryboard(storyboard: StoryboardLike) {
         imageUrl: dbPanel.imageUrl ? keyToSignedUrl(dbPanel.imageUrl) : null,
         sketchImageUrl: keyToSignedUrl(dbPanel.sketchImageUrl),
         videoUrl: dbPanel.videoUrl && !dbPanel.videoUrl.startsWith('http')
-          ? getSignedUrl(dbPanel.videoUrl, 7200)
+          ? getSignedUrl(dbPanel.videoUrl, 86400)
           : dbPanel.videoUrl,
         lipSyncVideoUrl: dbPanel.lipSyncVideoUrl && !dbPanel.lipSyncVideoUrl.startsWith('http')
-          ? getSignedUrl(dbPanel.lipSyncVideoUrl, 7200)
+          ? getSignedUrl(dbPanel.lipSyncVideoUrl, 86400)
           : dbPanel.lipSyncVideoUrl,
         candidateImages: signedCandidateImages,
         historyCount: panelHistoryCount,

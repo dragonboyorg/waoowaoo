@@ -32,6 +32,7 @@ export function usePanelPlayer({
   }, [imageUrl, onPreviewImage])
 
   const handlePlayClick = useCallback(async () => {
+    if (!currentVideoUrl) return
     setIsPlaying(true)
     setTimeout(async () => {
       if (!videoRef.current) return
@@ -39,11 +40,12 @@ export function usePanelPlayer({
         await videoRef.current.play()
       } catch (error: unknown) {
         if ((error as { name?: string }).name !== 'AbortError') {
-          _ulogError('Video play error:', error)
+          _ulogError('Video play error:', { url: currentVideoUrl, error })
         }
+        setIsPlaying(false)
       }
     }, 100)
-  }, [])
+  }, [currentVideoUrl])
 
   return {
     cssAspectRatio,

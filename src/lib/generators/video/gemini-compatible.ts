@@ -1,10 +1,11 @@
 /**
  * Gemini Compatible 视频生成器
  *
- * 直接调用 LocalProviderPro 的 Gemini 兼容 API
- * 格式：/v1beta/models/video-{model}:generateContent
+ * 使用 Google SDK 的 generateVideos 方法调用 Gemini 兼容 API
+ * LocalProviderPro 支持 predictLongRunning 端点格式
  */
 
+import { GoogleGenAI } from '@google/genai'
 import { BaseVideoGenerator, VideoGenerateParams, GenerateResult } from '../base'
 import { getProviderConfig } from '@/lib/api-config'
 import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
@@ -20,12 +21,12 @@ interface GeminiCompatibleVideoOptions {
     generationMode?: 'normal' | 'firstlastframe'
 }
 
-function dataUrlToInlineData(dataUrl: string): { mimeType: string; data: string } | null {
+function dataUrlToInlineData(dataUrl: string): { mimeType: string; imageBytes: string } | null {
     const base64Start = dataUrl.indexOf(';base64,')
     if (base64Start === -1) return null
     const mimeType = dataUrl.substring(5, base64Start)
-    const data = dataUrl.substring(base64Start + 8)
-    return { mimeType, data }
+    const imageBytes = dataUrl.substring(base64Start + 8)
+    return { mimeType, imageBytes }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -61,6 +62,13 @@ export class GeminiCompatibleVideoGenerator extends BaseVideoGenerator {
             throw new Error(`PROVIDER_BASE_URL_MISSING: ${this.providerId}`)
         }
 
+        _ulogInfo(`[GeminiCompatVideo] baseUrl=${providerConfig.baseUrl.slice(0, 50)}`)
+
+        const ai = new GoogleGenAI({
+            apiKey: providerConfig.apiKey,
+            httpOptions: { baseUrl: providerConfig.baseUrl },
+        })
+
         const {
             modelId,
             aspectRatio,
@@ -71,7 +79,7 @@ export class GeminiCompatibleVideoGenerator extends BaseVideoGenerator {
         } = options as GeminiCompatibleVideoOptions
 
         const resolvedModelId = this.modelId || modelId || 'ltx-2.3'
-        // LocalProviderPro 要求 video model 带 video- 前缀
+        // LocalProviderPro 需要视频模型带 video- 前缀
         const videoModelId = resolvedModelId.startsWith('video-') ? resolvedModelId : `video-${resolvedModelId}`
 
         _ulogInfo(`[GeminiCompatVideo] modelId=${resolvedModelId}, videoModelId=${videoModelId}`)
@@ -94,79 +102,66 @@ export class GeminiCompatibleVideoGenerator extends BaseVideoGenerator {
             }
         }
 
-        // 构造 Gemini generateContent 请求格式
-        const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = []
+        const request: Record<string, unknown> = {
+            model: videoModelId,
+        }
+        if (prompt.trim().length > 0) {
+            request.prompt = prompt.trim()
+        }
 
-        // 添加图片（首帧）
+        const config: Record<string, unknown> = {}
+        if (aspectRatio) config.aspectRatio = aspectRatio
+        if (resolution) config.resolution = resolution
+        if (typeof duration === 'number') config.durationSeconds = duration
+        if (typeof fps === 'number') config.fps = fps
+
+        let hasImageInput = false
+        // 添加首帧图片（图生视频）
         if (imageUrl) {
             const dataUrl = imageUrl.startsWith('data:') ? imageUrl : await normalizeToBase64ForGeneration(imageUrl)
             const inlineData = dataUrlToInlineData(dataUrl)
             if (inlineData) {
-                parts.push({ inlineData })
+                request.image = inlineData
+                hasImageInput = true
             }
         }
 
-        // 添加提示词
-        if (prompt.trim()) {
-            parts.push({ text: prompt.trim() })
-        }
-
-        const contents = [{ role: 'user', parts }]
-
-        // 构造 generationConfig
-        const generationConfig: Record<string, unknown> = {}
-        if (aspectRatio) generationConfig.aspectRatio = aspectRatio
-        if (resolution) generationConfig.resolution = resolution
-        if (typeof duration === 'number') generationConfig.durationSeconds = duration
-        if (typeof fps === 'number') generationConfig.fps = fps
-
-        // 🔥 首尾帧模式：添加 lastFrame
-        if (lastFrameImageUrl) {
+        // 首尾帧模式
+        if (lastFrameImageUrl && hasImageInput) {
             const dataUrl = lastFrameImageUrl.startsWith('data:')
                 ? lastFrameImageUrl
                 : await normalizeToBase64ForGeneration(lastFrameImageUrl)
             const inlineData = dataUrlToInlineData(dataUrl)
-            if (inlineData) {
-                generationConfig.lastFrame = inlineData
+            if (!inlineData) {
+                throw new Error('GEMINI_COMPAT_LAST_FRAME_INVALID')
             }
+            config.lastFrame = inlineData
         }
 
-        const requestBody = {
-            contents,
-            ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
+        if (Object.keys(config).length > 0) {
+            request.config = config
         }
 
-        // 构造请求 URL
-        const baseUrl = providerConfig.baseUrl.replace(/\/+$/, '')
-        const endpointUrl = `${baseUrl}/v1beta/models/${encodeURIComponent(videoModelId)}:generateContent`
-
-        _ulogInfo(`[GeminiCompatVideo] endpoint=${endpointUrl}`)
-        _ulogInfo(`[GeminiCompatVideo] body keys: ${Object.keys(requestBody).join(',')}`)
+        _ulogInfo(`[GeminiCompatVideo] calling ai.models.generateVideos with model=${videoModelId}`)
+        _ulogInfo(`[GeminiCompatVideo] REQUEST: ${JSON.stringify({
+            model: videoModelId,
+            prompt: request.prompt ? (request.prompt as string).slice(0, 50) : 'none',
+            hasImage: !!request.image,
+            imageKeys: request.image ? Object.keys(request.image as object) : [],
+            configKeys: request.config ? Object.keys(request.config as object) : [],
+        })}`)
 
         try {
-            const response = await fetch(endpointUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': providerConfig.apiKey,
-                },
-                body: JSON.stringify(requestBody),
-            })
+            const response = await ai.models.generateVideos(
+                request as unknown as Parameters<typeof ai.models.generateVideos>[0]
+            )
+            const operationName = extractOperationName(response)
 
-            const responseText = await response.text()
-            _ulogInfo(`[GeminiCompatVideo] response status=${response.status}`)
-
-            if (!response.ok) {
-                _ulogError(`[GeminiCompatVideo] error: ${responseText.slice(0, 200)}`)
-                throw new Error(`GEMINI_COMPAT_VIDEO_FAILED: ${response.status} ${responseText.slice(0, 100)}`)
-            }
-
-            const responseData = JSON.parse(responseText) as unknown
-            const operationName = extractOperationName(responseData)
+            _ulogInfo(`[GeminiCompatVideo] response received, operationName=${operationName || 'none'}`)
 
             if (!operationName) {
                 // 检查是否是同步返回的视频
-                const obj = asRecord(responseData)
+                const obj = asRecord(response)
                 const candidates = obj?.candidates as Array<unknown> | undefined
                 if (candidates && candidates.length > 0) {
                     const candidate = asRecord(candidates[0])
@@ -187,7 +182,6 @@ export class GeminiCompatibleVideoGenerator extends BaseVideoGenerator {
                 throw new Error('GEMINI_COMPAT_VIDEO_NO_OPERATION_NAME')
             }
 
-            _ulogInfo(`[GeminiCompatVideo] operationName=${operationName}`)
             return {
                 success: true,
                 async: true,
@@ -195,8 +189,8 @@ export class GeminiCompatibleVideoGenerator extends BaseVideoGenerator {
                 externalId: `GOOGLE:VIDEO:${operationName}`,
             }
         } catch (error) {
-            if (error instanceof Error) throw error
-            throw new Error(`GEMINI_COMPAT_VIDEO_ERROR: ${String(error)}`)
+            _ulogError(`[GeminiCompatVideo] error: ${error instanceof Error ? error.message : String(error)}`)
+            throw error
         }
     }
 }

@@ -303,7 +303,7 @@ export type AspectRatioKey = '1:1' | '1:4' | '1:8' | '2:3' | '3:2' | '3:4' | '4:
 /**
  * 默认图像分辨率档位（当用户未配置时的兜底值）
  */
-export const DEFAULT_IMAGE_RESOLUTION: ResolutionKey = '2K'
+export const DEFAULT_IMAGE_RESOLUTION: ResolutionKey = '1K'
 
 /**
  * 分辨率映射表

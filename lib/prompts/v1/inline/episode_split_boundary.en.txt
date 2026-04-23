@@ -1,0 +1,4 @@
+[Boundary Constraints]
+1. Each episode MUST include both startMarker and endMarker from the original text.
+2. Markers must be locatable in the original text; allow punctuation/whitespace differences only.
+3. If boundaries cannot be located reliably, return an empty episodes array.

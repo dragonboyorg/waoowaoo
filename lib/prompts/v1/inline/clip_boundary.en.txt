@@ -1,0 +1,4 @@
+[Boundary Constraints]
+1. The "start" and "end" anchors must come from the original text and be locatable.
+2. Allow punctuation/whitespace differences, but do not rewrite key entities or events.
+3. If anchors cannot be located reliably, return [] directly.

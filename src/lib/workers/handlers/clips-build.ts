@@ -9,7 +9,8 @@ import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
 import type { TaskJobData } from '@/lib/task/types'
-import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
+import { buildPrompt, PROMPT_IDS, getPromptTemplate } from '@/lib/prompt-i18n'
+import type { PromptLocale } from '@/lib/prompt-i18n/types'
 import { resolveAnalysisModel } from './resolve-analysis-model'
 
 function readAssetKind(value: Record<string, unknown>): string {
@@ -25,12 +26,18 @@ function readText(value: unknown): string {
 }
 
 const MAX_SPLIT_BOUNDARY_ATTEMPTS = 2
-const CLIP_BOUNDARY_SUFFIX = `
 
+function getClipBoundarySuffix(locale: PromptLocale): string {
+  try {
+    return getPromptTemplate(PROMPT_IDS.INLINE_CLIP_BOUNDARY as any, locale)
+  } catch {
+    return `
 [Boundary Constraints]
 1. The "start" and "end" anchors must come from the original text and be locatable.
 2. Allow punctuation/whitespace differences, but do not rewrite key entities or events.
 3. If anchors cannot be located reliably, return [] directly.`
+  }
+}
 
 export async function handleClipsBuildTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as Record<string, unknown>
@@ -112,7 +119,7 @@ export async function handleClipsBuildTask(job: Job<TaskJobData>) {
       characters_introduction: charactersIntroduction,
     },
   })
-  const promptTemplate = `${promptTemplateBase}${CLIP_BOUNDARY_SUFFIX}`
+  const promptTemplate = `${promptTemplateBase}${getClipBoundarySuffix(job.data.locale as PromptLocale)}`
 
   await reportTaskProgress(job, 20, {
     stage: 'clips_build_prepare',

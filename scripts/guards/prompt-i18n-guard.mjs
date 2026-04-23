@@ -9,10 +9,14 @@ const sourceExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
 const scanRoots = ['src', 'scripts']
 const allowedPromptTemplateReaders = new Set([
   'src/lib/prompt-i18n/template-store.ts',
+  'src/lib/prompt-i18n/version-config.ts',
+  'src/lib/assistant-platform/system-prompts.ts',
+  'src/app/api/prompts/version/route.ts',
   'scripts/guards/prompt-i18n-guard.mjs',
   'scripts/guards/prompt-semantic-regression.mjs',
   'scripts/guards/prompt-ab-regression.mjs',
   'scripts/guards/prompt-json-canary-guard.mjs',
+  'scripts/guards/prompt-version-guard.mjs',
 ])
 const languageDirectiveAllowList = new Set([
   'scripts/guards/prompt-i18n-guard.mjs',
@@ -108,10 +112,23 @@ function collectLanguageDirectiveViolations() {
 function collectLegacyPromptFiles() {
   return walk(path.join(root, 'lib', 'prompts'))
     .map((fullPath) => toRel(fullPath))
-    .filter((relPath) => relPath.endsWith('.txt') && !relPath.endsWith('.zh.txt') && !relPath.endsWith('.en.txt'))
+    .filter((relPath) =>
+      relPath.endsWith('.txt')
+      && !relPath.endsWith('.zh.txt')
+      && !relPath.endsWith('.en.txt')
+      && !relPath.endsWith('.system.txt')  // 排除系统提示词
+    )
 }
 
 function verifyPromptCatalogCoverage() {
+  // 先读取版本配置
+  const versionsPath = path.join(root, 'lib', 'prompts', 'versions.json')
+  let currentVersion = 'v1'  // 默认版本
+  if (fs.existsSync(versionsPath)) {
+    const versionsConfig = JSON.parse(fs.readFileSync(versionsPath, 'utf8'))
+    currentVersion = versionsConfig.current || 'v1'
+  }
+
   const catalogPath = path.join(root, 'src', 'lib', 'prompt-i18n', 'catalog.ts')
   if (!fs.existsSync(catalogPath)) {
     fail('Missing prompt catalog file', ['src/lib/prompt-i18n/catalog.ts'])
@@ -125,13 +142,14 @@ function verifyPromptCatalogCoverage() {
 
   const missing = []
   for (const stem of stems) {
-    const zhPath = path.join(root, 'lib', 'prompts', `${stem}.zh.txt`)
-    const enPath = path.join(root, 'lib', 'prompts', `${stem}.en.txt`)
+    // 使用当前版本目录
+    const zhPath = path.join(root, 'lib', 'prompts', currentVersion, `${stem}.zh.txt`)
+    const enPath = path.join(root, 'lib', 'prompts', currentVersion, `${stem}.en.txt`)
     if (!fs.existsSync(zhPath)) {
-      missing.push(`missing zh template: lib/prompts/${stem}.zh.txt`)
+      missing.push(`missing zh template: lib/prompts/${currentVersion}/${stem}.zh.txt`)
     }
     if (!fs.existsSync(enPath)) {
-      missing.push(`missing en template: lib/prompts/${stem}.en.txt`)
+      missing.push(`missing en template: lib/prompts/${currentVersion}/${stem}.en.txt`)
     }
   }
 

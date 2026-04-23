@@ -18,15 +18,23 @@ function trimText(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function buildImageContext(type: SyncedAssetType, hasReferenceImages: boolean): string {
+function buildImageContext(type: SyncedAssetType, hasReferenceImages: boolean, locale?: PromptLocale): string {
   if (!hasReferenceImages) return ''
-  if (type === 'character') {
-    return '【参考图片】\n请仔细分析参考图片中的服装款式、颜色、材质、配饰等关键视觉特征，并将这些特征融入更新后的描述中。'
+  const promptId = type === 'character'
+    ? PROMPT_IDS.INLINE_IMAGE_CONTEXT_CHARACTER
+    : type === 'prop'
+      ? PROMPT_IDS.INLINE_IMAGE_CONTEXT_PROP
+      : PROMPT_IDS.INLINE_IMAGE_CONTEXT_LOCATION
+  try {
+    return buildPrompt({
+      promptId,
+      locale: locale || 'zh',
+      variables: {},
+    })
+  } catch {
+    // 如果模板加载失败，返回空字符串
+    return ''
   }
-  if (type === 'prop') {
-    return '【参考图片】\n请仔细分析参考图片中的材质、轮廓、比例、装饰细节、配色与表面处理，并将这些特征融入更新后的描述中。'
-  }
-  return '【参考图片】\n请仔细分析参考图片中的建筑风格、装饰元素、光线氛围、色调等关键视觉特征，并将这些特征融入更新后的描述中。'
 }
 
 function parseModifiedDescription(responseText: string): {
@@ -69,7 +77,7 @@ export async function generateModifiedAssetDescription(params: {
       variables: {
         original_description: removeCharacterPromptSuffix(params.currentDescription),
         modify_instruction: params.modifyInstruction,
-        image_context: buildImageContext('character', hasReferenceImages),
+        image_context: buildImageContext('character', hasReferenceImages, params.locale),
       },
     })
     : params.type === 'prop'
@@ -80,7 +88,7 @@ export async function generateModifiedAssetDescription(params: {
           prop_name: trimText(params.propName) || '道具',
           original_description: removePropPromptSuffix(params.currentDescription),
           modify_instruction: params.modifyInstruction,
-          image_context: buildImageContext('prop', hasReferenceImages),
+          image_context: buildImageContext('prop', hasReferenceImages, params.locale),
         },
       })
     : buildPrompt({
@@ -90,7 +98,7 @@ export async function generateModifiedAssetDescription(params: {
         location_name: trimText(params.locationName) || '场景',
         original_description: removeLocationPromptSuffix(params.currentDescription),
         modify_instruction: params.modifyInstruction,
-        image_context: buildImageContext('location', hasReferenceImages),
+        image_context: buildImageContext('location', hasReferenceImages, params.locale),
       },
     })
 

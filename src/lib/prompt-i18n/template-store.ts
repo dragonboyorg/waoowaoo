@@ -4,14 +4,19 @@ import { PROMPT_CATALOG } from './catalog'
 import type { PromptId } from './prompt-ids'
 import type { PromptLocale } from './types'
 import { PromptI18nError } from './errors'
+import { getCurrentPromptVersion, getPromptBasePath, type PromptVersion } from './version-config'
 
 const templateCache = new Map<string, string>()
 
-function buildCacheKey(promptId: PromptId, locale: PromptLocale) {
-  return `${promptId}:${locale}`
+function buildCacheKey(promptId: PromptId, locale: PromptLocale, version: PromptVersion) {
+  return `${version}:${promptId}:${locale}`
 }
 
-export function getPromptTemplate(promptId: PromptId, locale: PromptLocale): string {
+export function getPromptTemplate(
+  promptId: PromptId,
+  locale: PromptLocale,
+  version?: PromptVersion,
+): string {
   const entry = PROMPT_CATALOG[promptId]
   if (!entry) {
     throw new PromptI18nError(
@@ -21,11 +26,13 @@ export function getPromptTemplate(promptId: PromptId, locale: PromptLocale): str
     )
   }
 
-  const cacheKey = buildCacheKey(promptId, locale)
+  const resolvedVersion = version || getCurrentPromptVersion()
+  const cacheKey = buildCacheKey(promptId, locale, resolvedVersion)
   const cached = templateCache.get(cacheKey)
   if (cached) return cached
 
-  const filePath = path.join(process.cwd(), 'lib', 'prompts', `${entry.pathStem}.${locale}.txt`)
+  const basePath = getPromptBasePath(resolvedVersion)
+  const filePath = path.join(basePath, `${entry.pathStem}.${locale}.txt`)
   let template = ''
   try {
     template = fs.readFileSync(filePath, 'utf-8')
@@ -34,10 +41,14 @@ export function getPromptTemplate(promptId: PromptId, locale: PromptLocale): str
       'PROMPT_TEMPLATE_NOT_FOUND',
       promptId,
       `Prompt template not found: ${filePath}`,
-      { filePath, locale },
+      { filePath, locale, version: resolvedVersion },
     )
   }
 
   templateCache.set(cacheKey, template)
   return template
+}
+
+export function invalidateTemplateCache(): void {
+  templateCache.clear()
 }

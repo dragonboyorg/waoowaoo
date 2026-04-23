@@ -1,0 +1,6 @@
+{
+  "current": "v1",
+  "versions": [
+    { "id": "v1", "label": "版本 1 (稳定)", "deprecated": false }
+  ]
+}

@@ -29,6 +29,33 @@ export const PROMPT_IDS = {
   NP_SINGLE_PANEL_IMAGE: 'np_single_panel_image',
   NP_STORYBOARD_EDIT: 'np_storyboard_edit',
   NP_VOICE_ANALYSIS: 'np_voice_analysis',
+  // Inline prompts
+  INLINE_MODIFY_CHARACTER: 'inline_modify_character',
+  INLINE_MODIFY_PROP: 'inline_modify_prop',
+  INLINE_MODIFY_LOCATION: 'inline_modify_location',
+  INLINE_MODIFY_STORYBOARD: 'inline_modify_storyboard',
+  INLINE_IMAGE_CONTEXT_CHARACTER: 'inline_image_context_character',
+  INLINE_IMAGE_CONTEXT_PROP: 'inline_image_context_prop',
+  INLINE_IMAGE_CONTEXT_LOCATION: 'inline_image_context_location',
+  INLINE_INSERT_PANEL: 'inline_insert_panel',
+  INLINE_CLIP_BOUNDARY: 'inline_clip_boundary',
+  INLINE_EPISODE_SPLIT_BOUNDARY: 'inline_episode_split_boundary',
+  // Suffix prompts
+  SUFFIX_CHARACTER: 'suffix_character',
+  SUFFIX_PROP: 'suffix_prop',
+  // Art style prompts
+  ART_STYLE_XUANJI: 'art_style_xuanji',
+  ART_STYLE_AMERICAN_COMIC: 'art_style_american_comic',
+  ART_STYLE_CHINESE_COMIC: 'art_style_chinese_comic',
+  ART_STYLE_JAPANESE_ANIME: 'art_style_japanese_anime',
+  ART_STYLE_REALISTIC: 'art_style_realistic',
+  // Voice presets
+  VOICE_PRESET_MALE_BROADCASTER: 'voice_preset_male_broadcaster',
+  VOICE_PRESET_GENTLE_FEMALE: 'voice_preset_gentle_female',
+  VOICE_PRESET_MATURE_MALE: 'voice_preset_mature_male',
+  VOICE_PRESET_LIVELY_FEMALE: 'voice_preset_lively_female',
+  VOICE_PRESET_INTELLECTUAL_FEMALE: 'voice_preset_intellectual_female',
+  VOICE_PRESET_NARRATOR: 'voice_preset_narrator',
 } as const
 
 export type PromptId = (typeof PROMPT_IDS)[keyof typeof PROMPT_IDS]

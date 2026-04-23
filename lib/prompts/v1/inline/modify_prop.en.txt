@@ -1,0 +1,2 @@
+Please modify the prop image according to the following instructions, keeping the prop body, structure and key materials consistent:
+{modify_instruction}

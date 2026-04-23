@@ -7,6 +7,7 @@ export type PromptI18nErrorCode =
   | 'PROMPT_VARIABLE_UNEXPECTED'
   | 'PROMPT_VARIABLE_VALUE_INVALID'
   | 'PROMPT_PLACEHOLDER_MISMATCH'
+  | 'VERSIONS_CONFIG_NOT_FOUND'
 
 export class PromptI18nError extends Error {
   readonly code: PromptI18nErrorCode

@@ -10,7 +10,8 @@ import { getUserModelConfig } from '@/lib/config-service'
 import { createTextMarkerMatcher } from '@/lib/novel-promotion/story-to-script/clip-matching'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
 import type { TaskJobData } from '@/lib/task/types'
-import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
+import { buildPrompt, PROMPT_IDS, getPromptTemplate } from '@/lib/prompt-i18n'
+import type { PromptLocale } from '@/lib/prompt-i18n/types'
 
 type EpisodeSplit = {
   number?: number
@@ -27,12 +28,18 @@ type SplitResponse = {
 }
 
 const MAX_EPISODE_SPLIT_ATTEMPTS = 2
-const EPISODE_SPLIT_BOUNDARY_SUFFIX = `
 
+function getEpisodeSplitBoundarySuffix(locale: PromptLocale): string {
+  try {
+    return getPromptTemplate(PROMPT_IDS.INLINE_EPISODE_SPLIT_BOUNDARY as any, locale)
+  } catch {
+    return `
 [Boundary Constraints]
 1. Each episode MUST include both startMarker and endMarker from the original text.
 2. Markers must be locatable in the original text; allow punctuation/whitespace differences only.
 3. If boundaries cannot be located reliably, return an empty episodes array.`
+  }
+}
 
 function parseSplitResponse(aiResponse: string): SplitResponse {
   const parsed = safeParseJsonObject(aiResponse) as SplitResponse
@@ -94,7 +101,7 @@ export async function handleEpisodeSplitTask(job: Job<TaskJobData>) {
       CONTENT: content,
     },
   })
-  const prompt = `${promptBase}${EPISODE_SPLIT_BOUNDARY_SUFFIX}`
+  const prompt = `${promptBase}${getEpisodeSplitBoundarySuffix(job.data.locale as PromptLocale)}`
 
   await reportTaskProgress(job, 20, {
     stage: 'episode_split_prepare',

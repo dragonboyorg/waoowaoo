@@ -32,7 +32,7 @@ function replaceAllPlaceholders(template: string, key: string, value: string): s
 }
 
 export function buildPrompt(input: BuildPromptInput): string {
-  const { promptId, locale, variables = {} } = input
+  const { promptId, locale, variables = {}, version } = input
   const entry = PROMPT_CATALOG[promptId]
   if (!entry) {
     throw new PromptI18nError(
@@ -42,7 +42,7 @@ export function buildPrompt(input: BuildPromptInput): string {
     )
   }
 
-  const template = getPromptTemplate(promptId, locale)
+  const template = getPromptTemplate(promptId, locale, version)
 
   const templatePlaceholders = extractPlaceholders(template)
   const defined = new Set(entry.variableKeys)

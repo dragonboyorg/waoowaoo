@@ -1,5 +1,6 @@
 import type { Locale } from '@/i18n/routing'
 import type { PromptId } from './prompt-ids'
+import type { PromptVersion } from './version-config'
 
 export type PromptLocale = Locale
 
@@ -14,4 +15,5 @@ export type BuildPromptInput = {
   promptId: PromptId
   locale: PromptLocale
   variables?: PromptVariables
+  version?: PromptVersion
 }

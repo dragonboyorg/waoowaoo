@@ -153,4 +153,100 @@ export const PROMPT_CATALOG: Record<PromptId, PromptCatalogEntry> = {
     pathStem: 'novel-promotion/voice_analysis',
     variableKeys: ['input', 'characters_lib_name', 'characters_introduction', 'storyboard_json'],
   },
+  // Inline prompts
+  [PROMPT_IDS.INLINE_MODIFY_CHARACTER]: {
+    pathStem: 'inline/modify_character',
+    variableKeys: ['modify_instruction'],
+  },
+  [PROMPT_IDS.INLINE_MODIFY_PROP]: {
+    pathStem: 'inline/modify_prop',
+    variableKeys: ['modify_instruction'],
+  },
+  [PROMPT_IDS.INLINE_MODIFY_LOCATION]: {
+    pathStem: 'inline/modify_location',
+    variableKeys: ['modify_instruction'],
+  },
+  [PROMPT_IDS.INLINE_MODIFY_STORYBOARD]: {
+    pathStem: 'inline/modify_storyboard',
+    variableKeys: ['modify_instruction'],
+  },
+  [PROMPT_IDS.INLINE_IMAGE_CONTEXT_CHARACTER]: {
+    pathStem: 'inline/image_context_character',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.INLINE_IMAGE_CONTEXT_PROP]: {
+    pathStem: 'inline/image_context_prop',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.INLINE_IMAGE_CONTEXT_LOCATION]: {
+    pathStem: 'inline/image_context_location',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.INLINE_INSERT_PANEL]: {
+    pathStem: 'inline/insert_panel',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.INLINE_CLIP_BOUNDARY]: {
+    pathStem: 'inline/clip_boundary',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.INLINE_EPISODE_SPLIT_BOUNDARY]: {
+    pathStem: 'inline/episode_split_boundary',
+    variableKeys: [],
+  },
+  // Suffix prompts
+  [PROMPT_IDS.SUFFIX_CHARACTER]: {
+    pathStem: 'suffix/character_suffix',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.SUFFIX_PROP]: {
+    pathStem: 'suffix/prop_suffix',
+    variableKeys: [],
+  },
+  // Art style prompts
+  [PROMPT_IDS.ART_STYLE_XUANJI]: {
+    pathStem: 'art-styles/xuanji-style',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.ART_STYLE_AMERICAN_COMIC]: {
+    pathStem: 'art-styles/american-comic',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.ART_STYLE_CHINESE_COMIC]: {
+    pathStem: 'art-styles/chinese-comic',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.ART_STYLE_JAPANESE_ANIME]: {
+    pathStem: 'art-styles/japanese-anime',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.ART_STYLE_REALISTIC]: {
+    pathStem: 'art-styles/realistic',
+    variableKeys: [],
+  },
+  // Voice presets
+  [PROMPT_IDS.VOICE_PRESET_MALE_BROADCASTER]: {
+    pathStem: 'voice-presets/maleBroadcaster',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.VOICE_PRESET_GENTLE_FEMALE]: {
+    pathStem: 'voice-presets/gentleFemale',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.VOICE_PRESET_MATURE_MALE]: {
+    pathStem: 'voice-presets/matureMale',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.VOICE_PRESET_LIVELY_FEMALE]: {
+    pathStem: 'voice-presets/livelyFemale',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.VOICE_PRESET_INTELLECTUAL_FEMALE]: {
+    pathStem: 'voice-presets/intellectualFemale',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.VOICE_PRESET_NARRATOR]: {
+    pathStem: 'voice-presets/narrator',
+    variableKeys: [],
+  },
 }

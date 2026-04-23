@@ -15,6 +15,7 @@ import {
 import { ApiConfigToolbar } from './ApiConfigToolbar'
 import { ApiConfigProviderList } from './ApiConfigProviderList'
 import { DefaultModelCards } from './DefaultModelCards'
+import { PromptVersionSelect } from '../PromptVersionSelect'
 import { useApiConfigFilters } from './hooks/useApiConfigFilters'
 import { AppIcon } from '@/components/ui/icons'
 
@@ -275,6 +276,11 @@ export function ApiConfigTabContainer() {
             workflowConcurrency={workflowConcurrency}
             handleWorkflowConcurrencyChange={handleWorkflowConcurrencyChange}
           />
+
+          {/* Prompt Version Section */}
+          <div className="glass-surface-soft rounded-xl border border-[var(--glass-stroke-base)] p-4">
+            <PromptVersionSelect />
+          </div>
 
           <ApiConfigProviderList
             modelProviders={modelProviders}
